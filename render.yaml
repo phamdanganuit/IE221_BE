@@ -1,0 +1,37 @@
+# render.yaml — Render Blueprint for shoe_shop BE
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: shoe-shop-be
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: MONGODB_URI
+        sync: false          # set manually in Render dashboard
+      - key: MONGODB_DB
+        value: shoe_shop
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_SECRET
+        sync: false
+      - key: FB_APP_ID
+        sync: false
+      - key: FB_APP_SECRET
+        sync: false
+      - key: ADMIN_SIGNUP_KEY
+        sync: false

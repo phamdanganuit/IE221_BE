@@ -6,7 +6,7 @@ from email_validator import validate_email, EmailNotValidError
 from mongoengine.errors import NotUniqueError, ValidationError as MEValidationError
 from datetime import datetime
 import os
-from django.core.files.storage import default_storage
+from config.storage import upload_file, delete_file
 from .models import User , Address
 from .auth import hash_password, check_password, create_jwt, require_auth, require_admin
 
@@ -308,87 +308,11 @@ class UpdateAvatarView(APIView):
                           status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
 
         if user.avatar:
-            try:
-                old_path = user.avatar
-                if old_path.startswith('/media/'):
-                    old_path = old_path.replace('/media/', '')
-                elif old_path.startswith('https://'):
-                    from urllib.parse import urlparse
-                    from django.conf import settings
-                    parsed = urlparse(old_path)
-                    container = getattr(settings, 'AZURE_STORAGE_CONTAINER', 'media')
-                    old_path = parsed.path.lstrip('/').replace(f'{container}/', '')
-                
-                if default_storage.exists(old_path):
-                    default_storage.delete(old_path)
-            except Exception:
-                pass
+            delete_file(user.avatar)
 
-        import uuid
-        ext = file_obj.name.split('.')[-1] if '.' in file_obj.name else 'jpg'
-        filename = f"avatars/avatar_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        
-        from django.conf import settings
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        azure_conn = getattr(settings, 'AZURE_STORAGE_CONNECTION_STRING', '') or os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
-        azure_account = getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', '') or os.getenv('AZURE_STORAGE_ACCOUNT_NAME', '')
-        
-        if azure_conn and azure_account:
-            from storages.backends.azure_storage import AzureStorage
-            storage = AzureStorage()
-        else:
-            storage = default_storage
-        
-        try:
-            saved_path = storage.save(filename, file_obj)
-            if not saved_path:
-                return Response({"detail": "Failed to save file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            logger.error(f"Failed to save file: {str(e)}", exc_info=True)
-            return Response({"detail": f"Failed to save file: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        try:
-            azure_conn = getattr(settings, 'AZURE_STORAGE_CONNECTION_STRING', '')
-            if azure_conn:
-                account_name = getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', '')
-                container = getattr(settings, 'AZURE_STORAGE_CONTAINER', 'media')
-                
-                blob_path = saved_path
-                if blob_path.startswith(container + '/'):
-                    blob_path = blob_path[len(container) + 1:]
-                elif blob_path.startswith('/' + container + '/'):
-                    blob_path = blob_path[len('/' + container) + 1:]
-                
-                avatar_url = f"https://{account_name}.blob.core.windows.net/{container}/{blob_path}"
-                
-                if azure_conn and azure_account:
-                    try:
-                        storage_url = storage.url(saved_path)
-                        if storage_url and storage_url.startswith('http'):
-                            avatar_url = storage_url
-                    except Exception:
-                        pass
-            else:
-                avatar_url = default_storage.url(saved_path)
-                if not avatar_url.startswith('http') and not avatar_url.startswith('/media/'):
-                    avatar_url = f"/media/{avatar_url}"
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to get URL: {str(e)}")
-            # Fallback
-            azure_conn = getattr(settings, 'AZURE_STORAGE_CONNECTION_STRING', '')
-            if azure_conn:
-                account_name = getattr(settings, 'AZURE_STORAGE_ACCOUNT_NAME', '')
-                container = getattr(settings, 'AZURE_STORAGE_CONTAINER', 'media')
-                blob_path = saved_path
-                if blob_path.startswith(container + '/'):
-                    blob_path = blob_path[len(container) + 1:]
-                avatar_url = f"https://{account_name}.blob.core.windows.net/{container}/{blob_path}"
-            else:
-                avatar_url = f"/media/{saved_path}"
+        avatar_url = upload_file(file_obj, folder="avatars", prefix=f"avatar_{user_id}")
+        if not avatar_url:
+            return Response({"detail": "Failed to save file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         user.avatar = avatar_url
         user.save()

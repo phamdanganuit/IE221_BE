@@ -1047,19 +1047,8 @@ class ReviewImageUploadView(APIView):
         return f"/media/{url.lstrip('/')}"
 
     def _get_storage(self):
-        azure_conn = getattr(settings, "AZURE_STORAGE_CONNECTION_STRING", "") or os.getenv(
-            "AZURE_STORAGE_CONNECTION_STRING", ""
-        )
-        azure_account = getattr(settings, "AZURE_STORAGE_ACCOUNT_NAME", "") or os.getenv(
-            "AZURE_STORAGE_ACCOUNT_NAME", ""
-        )
-
-        if azure_conn and azure_account:
-            from storages.backends.azure_storage import AzureStorage
-
-            return AzureStorage()
-
-        return default_storage
+        from config.storage import get_storage
+        return get_storage()
 
 
 class OrderReviewableItemsView(APIView):
